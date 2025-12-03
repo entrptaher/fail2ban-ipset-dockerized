@@ -1,0 +1,26 @@
+services:
+  bot-protection:
+    build: .
+    container_name: bot-protection
+    restart: unless-stopped
+    # Required: access host network to modify iptables
+    network_mode: host
+    # Required: modify host firewall rules
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      # borestad blocklist period: 1d, 3d, 7d, 14d, 30d, 60d, 90d, 120d
+      # Shorter = fewer IPs, more recent attacks
+      # Longer = more IPs, includes older threats
+      - BORESTAD_PERIOD=14d
+    volumes:
+      # Mount your traefik access.log directly
+      # Default dokploy path shown - change if different
+      - ${TRAEFIK_ACCESS_LOG:-/etc/dokploy/traefik/dynamic/access.log}:/var/log/traefik/access.log:ro
+      # Persist fail2ban database across restarts
+      - fail2ban-data:/var/lib/fail2ban
+
+volumes:
+  fail2ban-data:
