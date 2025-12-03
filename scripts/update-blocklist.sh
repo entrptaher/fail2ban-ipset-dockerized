@@ -28,7 +28,7 @@ log() {
 }
 
 cleanup() {
-    rm -f "$TEMP_FILE" "/tmp/blocklist-clean-$$.txt"
+    rm -f "$TEMP_FILE" "/tmp/blocklist-restore-$$.txt"
 }
 trap cleanup EXIT
 
@@ -90,19 +90,17 @@ download_list "BinaryDefense" \
 
 log "Processing downloaded IPs..."
 
-# Extract unique valid IPs
-CLEAN_FILE="/tmp/blocklist-clean-$$.txt"
-grep -oE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$TEMP_FILE" 2>/dev/null | sort -u > "$CLEAN_FILE"
-TOTAL=$(wc -l < "$CLEAN_FILE")
+# Extract unique valid IPs and format for ipset restore
+RESTORE_FILE="/tmp/blocklist-restore-$$.txt"
+grep -oE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$TEMP_FILE" 2>/dev/null | sort -u | sed "s/^/add $IPSET_NAME /" > "$RESTORE_FILE"
+TOTAL=$(wc -l < "$RESTORE_FILE")
 log "  Found $TOTAL unique IPs"
 
-# Add IPs to ipset using restore (MUCH faster than individual adds)
+# Batch load all IPs at once (fastest method)
 log "  Loading into ipset..."
-while read -r ip; do
-    echo "add $IPSET_NAME $ip -exist"
-done < "$CLEAN_FILE" | ipset restore -exist 2>/dev/null
+ipset restore -exist < "$RESTORE_FILE" 2>/dev/null || true
 
-rm -f "$CLEAN_FILE"
+rm -f "$RESTORE_FILE"
 log "  Done loading IPs"
 
 log "Configuring iptables rules..."
