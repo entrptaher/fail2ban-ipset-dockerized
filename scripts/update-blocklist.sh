@@ -28,7 +28,7 @@ log() {
 }
 
 cleanup() {
-    rm -f "$TEMP_FILE"
+    rm -f "$TEMP_FILE" "/tmp/blocklist-clean-$$.txt"
 }
 trap cleanup EXIT
 
@@ -90,15 +90,20 @@ download_list "BinaryDefense" \
 
 log "Processing downloaded IPs..."
 
-# Add IPs to ipset
-ADDED=0
-while read -r ip; do
-    if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        ipset add "$IPSET_NAME" "$ip" -exist 2>/dev/null && ((ADDED++)) || true
-    fi
-done < <(grep -oP '^([0-9]{1,3}\.){3}[0-9]{1,3}' "$TEMP_FILE" 2>/dev/null | sort -u)
+# Extract unique valid IPs
+CLEAN_FILE="/tmp/blocklist-clean-$$.txt"
+grep -oE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$TEMP_FILE" 2>/dev/null | sort -u > "$CLEAN_FILE"
+TOTAL=$(wc -l < "$CLEAN_FILE")
+log "  Found $TOTAL unique IPs"
 
-log "  Added $ADDED IPs to ipset"
+# Add IPs to ipset using restore (MUCH faster than individual adds)
+log "  Loading into ipset..."
+while read -r ip; do
+    echo "add $IPSET_NAME $ip -exist"
+done < "$CLEAN_FILE" | ipset restore -exist 2>/dev/null
+
+rm -f "$CLEAN_FILE"
+log "  Done loading IPs"
 
 log "Configuring iptables rules..."
 
