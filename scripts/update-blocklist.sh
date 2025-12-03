@@ -17,6 +17,8 @@ set -euo pipefail
 IPSET_NAME="global-blocklist"
 TEMP_FILE="/tmp/blocklist-$$.txt"
 LOG_FILE="/var/log/blocklist-update.log"
+CACHE_FILE="/var/cache/blocklist-ips.txt"
+CACHE_MAX_AGE=21600  # 6 hours in seconds
 
 # borestad list period: 1d, 3d, 7d, 14d, 30d, 60d, 90d, 120d
 # Shorter = fewer IPs but more recent attacks
@@ -33,6 +35,47 @@ cleanup() {
 trap cleanup EXIT
 
 log "========== Starting blocklist update =========="
+
+# Check if we have a valid cache
+if [ -f "$CACHE_FILE" ]; then
+    CACHE_AGE=$(($(date +%s) - $(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)))
+    if [ "$CACHE_AGE" -lt "$CACHE_MAX_AGE" ]; then
+        log "Using cached blocklist (age: ${CACHE_AGE}s)"
+
+        # Create ipset if needed
+        if ! ipset list "$IPSET_NAME" &>/dev/null; then
+            ipset create "$IPSET_NAME" hash:ip maxelem 250000
+        else
+            ipset flush "$IPSET_NAME"
+        fi
+
+        # Load from cache
+        ipset restore -exist < "$CACHE_FILE" 2>/dev/null || true
+        FINAL_COUNT=$(ipset list "$IPSET_NAME" 2>/dev/null | grep -c "^[0-9]" || echo "0")
+        log "Loaded $FINAL_COUNT IPs from cache"
+
+        # Still need to set up iptables rules
+        log "Configuring iptables rules..."
+        if ! iptables -C INPUT -m set --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; then
+            iptables -I INPUT 1 -m set --match-set "$IPSET_NAME" src -j DROP
+            log "  ✓ Added INPUT chain rule"
+        else
+            log "  ✓ INPUT chain rule exists"
+        fi
+        if iptables -L DOCKER-USER &>/dev/null; then
+            if ! iptables -C DOCKER-USER -m set --match-set "$IPSET_NAME" src -j DROP 2>/dev/null; then
+                iptables -I DOCKER-USER 1 -m set --match-set "$IPSET_NAME" src -j DROP
+                log "  ✓ Added DOCKER-USER chain rule"
+            else
+                log "  ✓ DOCKER-USER chain rule exists"
+            fi
+        fi
+        log "========== Update Complete (from cache) =========="
+        exit 0
+    else
+        log "Cache expired (age: ${CACHE_AGE}s), downloading fresh lists..."
+    fi
+fi
 
 # Create ipset if it doesn't exist
 if ! ipset list "$IPSET_NAME" &>/dev/null; then
@@ -99,6 +142,11 @@ log "  Found $TOTAL unique IPs"
 # Batch load all IPs at once (fastest method)
 log "  Loading into ipset..."
 ipset restore -exist < "$RESTORE_FILE" 2>/dev/null || true
+
+# Save to cache for fast restarts
+mkdir -p /var/cache
+cp "$RESTORE_FILE" "$CACHE_FILE"
+log "  Saved to cache"
 
 rm -f "$RESTORE_FILE"
 log "  Done loading IPs"

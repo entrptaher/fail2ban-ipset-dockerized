@@ -19,8 +19,13 @@ services:
       # Mount your traefik access.log directly
       # Default dokploy path shown - change if different
       - ${TRAEFIK_ACCESS_LOG:-/etc/dokploy/traefik/dynamic/access.log}:/var/log/traefik/access.log:ro
+      # Mount host auth.log for sshd jail
+      - /var/log/auth.log:/var/log/auth.log:ro
       # Persist fail2ban database across restarts
       - fail2ban-data:/var/lib/fail2ban
+      # Cache blocklist for fast restarts
+      - blocklist-cache:/var/cache
 
 volumes:
   fail2ban-data:
+  blocklist-cache:

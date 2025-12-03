@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
 # Copy scripts and configs
 COPY scripts/update-blocklist.sh /usr/local/bin/update-blocklist.sh
 COPY fail2ban/filter.d/traefik-probe.conf /etc/fail2ban/filter.d/traefik-probe.conf
+COPY fail2ban/jail.d/defaults.conf /etc/fail2ban/jail.d/defaults.conf
 COPY fail2ban/jail.d/traefik.conf /etc/fail2ban/jail.d/traefik.conf
 COPY scripts/entrypoint.sh /entrypoint.sh
 

@@ -14,6 +14,15 @@ else
     sed -i 's/enabled = true/enabled = false/' /etc/fail2ban/jail.d/traefik.conf
 fi
 
+# Check if auth.log exists
+if [ -f "/var/log/auth.log" ]; then
+    echo "Auth log found."
+else
+    echo "WARNING: /var/log/auth.log not mounted"
+    echo "Fail2ban sshd jail will be disabled."
+    sed -i '/\[sshd\]/,/^$/s/enabled = true/enabled = false/' /etc/fail2ban/jail.d/defaults.conf
+fi
+
 # Run initial blocklist update
 echo ""
 echo "Loading IP blocklists..."
