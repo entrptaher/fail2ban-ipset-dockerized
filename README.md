@@ -78,3 +78,89 @@ Bans IPs on first probe for:
 ## Logs
 
 All logs viewable via `docker logs -f bot-protection`
+
+## Example Output
+
+```
+========================================
+   Bot Protection Container Starting
+========================================
+Traefik log found.
+Auth log found.
+
+Loading IP blocklists...
+[2025-12-03 07:57:11] ========== Starting blocklist update ==========
+[2025-12-03 07:57:11] Downloading blocklists...
+[2025-12-03 07:57:11]   Downloading: AbuseIPDB (14d, 100% confidence)
+[2025-12-03 07:57:11]     ✓ Success
+[2025-12-03 07:57:11]   Downloading: Blocklist.de SSH
+[2025-12-03 07:57:12]     ✓ Success
+[2025-12-03 07:57:12]   Downloading: Blocklist.de All
+[2025-12-03 07:57:12]     ✓ Success
+[2025-12-03 07:57:12]   Downloading: Emerging Threats
+[2025-12-03 07:57:12]     ✓ Success
+[2025-12-03 07:57:12]   Downloading: CI Army
+[2025-12-03 07:57:13]     ✓ Success
+[2025-12-03 07:57:13]   Downloading: GreenSnow
+[2025-12-03 07:57:13]     ✓ Success
+[2025-12-03 07:57:13]   Downloading: BinaryDefense
+[2025-12-03 07:57:14]     ✓ Success
+[2025-12-03 07:57:14] Processing downloaded IPs...
+[2025-12-03 07:57:14]   Found 105511 unique IPs
+[2025-12-03 07:57:14]   Loading into ipset...
+[2025-12-03 07:57:14]   Saved to cache
+[2025-12-03 07:57:14]   Done loading IPs
+[2025-12-03 07:57:14] Configuring iptables rules...
+[2025-12-03 07:57:14]   ✓ INPUT chain rule exists
+[2025-12-03 07:57:14]   ✓ DOCKER-USER chain rule exists
+[2025-12-03 07:57:14] ========== Update Complete ==========
+[2025-12-03 07:57:14] Total IPs blocked: 41750
+
+Starting blocklist update loop (every 6 hours)...
+
+Starting fail2ban...
+Server ready
+
+========================================
+   Bot Protection Active
+========================================
+
+Blocklist IPs: 41750
+
+Fail2ban jails:
+Status
+|- Number of jail:    2
+`- Jail list:    sshd, traefik-probe
+
+========================================
+2025-12-03 07:57:15 fail2ban.actions: NOTICE  [sshd] Ban 45.xxx.xxx.124
+2025-12-03 07:57:15 fail2ban.actions: WARNING [sshd] 92.xxx.xxx.72 already banned
+2025-12-03 07:57:15 fail2ban.actions: NOTICE  [sshd] Ban 92.xxx.xxx.62
+2025-12-03 07:57:16 fail2ban.filter:  INFO    [sshd] Found 61.xxx.xxx.69 - 2025-12-03 07:57:16
+```
+
+### Checking Jail Status
+
+```bash
+$ docker exec bot-protection fail2ban-client status traefik-probe
+Status for the jail: traefik-probe
+|- Filter
+|  |- Currently failed:    0
+|  |- Total failed:    0
+|  `- File list:    /var/log/traefik/access.log
+`- Actions
+   |- Currently banned:    0
+   |- Total banned:    0
+   `- Banned IP list:
+
+$ docker exec bot-protection fail2ban-client status sshd
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed:    15
+|  |- Total failed:    281
+|  `- File list:    /var/log/auth.log
+`- Actions
+   |- Currently banned:    16
+   |- Total banned:    16
+   `- Banned IP list:    61.xxx.xxx.69 92.xxx.xxx.76 92.xxx.xxx.72 ...
+```
